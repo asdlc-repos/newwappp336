@@ -1,0 +1,70 @@
+{
+  "strategy": "Bottom-Up",
+  "overview": "The todo-api has no dependencies and must be built first; the todo-web frontend depends on it, so it comes in phase 2. This bottom-up approach ensures the API contract is available before the UI integrates with it.",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Backend API",
+      "description": "Foundation service providing authentication and task/category CRUD with no dependencies.",
+      "components": [
+        {
+          "name": "todo-api",
+          "componentType": "service",
+          "language": "Go",
+          "deployment": "Docker",
+          "responsibilities": [
+            "Provide signup/login endpoints issuing JWT tokens with bcrypt-hashed passwords",
+            "Offer CRUD endpoints for tasks and categories scoped to the authenticated user",
+            "Enforce authentication middleware and per-user data isolation with proper 401/403/404 responses",
+            "Expose /health endpoint and handle CORS preflight for the SPA",
+            "Maintain in-memory thread-safe storage of users, tasks, and categories"
+          ],
+          "architectureContext": "Core backend REST API on port 9090 consumed by the todo-web SPA over HTTPS using JWT bearer tokens. It is the single source of truth for user, task, and category data.",
+          "keyConsiderations": [
+            "Use sync.RWMutex to guard in-memory maps against concurrent access",
+            "Sign JWTs with JWT_SECRET env var (default 'devsecret'), 24h expiry, subject=userId",
+            "Deleting a category must null categoryId on that user's tasks",
+            "Permissive CORS with Authorization header allowed; handle OPTIONS preflight",
+            "Multi-stage Dockerfile golang:1.22-alpine → distroless/static, EXPOSE 9090"
+          ],
+          "apiContract": "openapi: 3.0.3\ninfo:\n  title: Todo API\n  version: 1.0.0\nservers:\n  - url: /\npaths:\n  /health:\n    get:\n      summary: Health check\n      responses:\n        '200':\n          description: OK\n  /auth/signup:\n    post:\n      summary: Create a new user account\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              $ref: '#/components/schemas/AuthRequest'\n      responses:\n        '201':\n          description: Created\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/AuthResponse'\n        '409':\n          description: User exists\n  /auth/login:\n    post:\n      summary: Log in\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              $ref: '#/components/schemas/AuthRequest'\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/AuthResponse'\n        '401':\n          description: Invalid credentials\n  /categories:\n    get:\n      summary: List categories for current user\n      security: [{bearerAuth: []}]\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                type: array\n                items: {$ref: '#/components/schemas/Category'}\n    post:\n      summary: Create category\n      security: [{bearerAuth: []}]\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                name: {type: string}\n              required: [name]\n      responses:\n        '201':\n          description: Created\n          content:\n            application/json:\n              schema: {$ref: '#/components/schemas/Category'}\n  /categories/{id}:\n    delete:\n      summary: Delete category\n      security: [{bearerAuth: []}]\n      parameters:\n        - in: path\n          name: id\n          required: true\n          schema: {type: string}\n      responses:\n        '204':\n          description: Deleted\n  /tasks:\n    get:\n      summary: List tasks for current user\n      security: [{bearerAuth: []}]\n      parameters:\n        - in: query\n          name: categoryId\n          schema: {type: string}\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                type: array\n                items: {$ref: '#/components/schemas/Task'}\n    post:\n      summary: Create task\n      security: [{bearerAuth: []}]\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema: {$ref: '#/components/schemas/TaskInput'}\n      responses:\n        '201':\n          description: Created\n          content:\n            application/json:\n              schema: {$ref: '#/components/schemas/Task'}\n  /tasks/{id}:\n    put:\n      summary: Update task\n      security: [{bearerAuth: []}]\n      parameters:\n        - in: path\n          name: id\n          required: true\n          schema: {type: string}\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema: {$ref: '#/components/schemas/TaskInput'}\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema: {$ref: '#/components/schemas/Task'}\n        '404':\n          description: Not found\n    delete:\n      summary: Delete task\n      security: [{bearerAuth: []}]\n      parameters:\n        - in: path\n          name: id\n          required: true\n          schema: {type: string}\n      responses:\n        '204':\n          description: Deleted\n  /tasks/{id}/complete:\n    post:\n      summary: Toggle task completion\n      security: [{bearerAuth: []}]\n      parameters:\n        - in: path\n          name: id\n          required: true\n          schema: {type: string}\n        - in: query\n          name: completed\n          schema: {type: boolean}\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema: {$ref: '#/components/schemas/Task'}\ncomponents:\n  securitySchemes:\n    bearerAuth:\n      type: http\n      scheme: bearer\n  schemas:\n    AuthRequest:\n      type: object\n      properties:\n        email: {type: string}\n        password: {type: string}\n      required: [email, password]\n    AuthResponse:\n      type: object\n      properties:\n        token: {type: string}\n        userId: {type: string}\n    Category:\n      type: object\n      properties:\n        id: {type: string}\n        name: {type: string}\n    TaskInput:\n      type: object\n      properties:\n        title: {type: string}\n        dueDate: {type: string, format: date-time, nullable: true}\n        categoryId: {type: string, nullable: true}\n        completed: {type: boolean}\n      required: [title]\n    Task:\n      type: object\n      properties:\n        id: {type: string}\n        title: {type: string}\n        dueDate: {type: string, format: date-time, nullable: true}\n        categoryId: {type: string, nullable: true}\n        completed: {type: boolean}\n        createdAt: {type: string, format: date-time}\n",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Frontend SPA",
+      "description": "React web app that consumes the backend API.",
+      "components": [
+        {
+          "name": "todo-web",
+          "componentType": "web-app",
+          "language": "TypeScript / React",
+          "deployment": "Docker",
+          "responsibilities": [
+            "Provide signup/login UI and persist JWT in localStorage",
+            "Render dashboard with category sidebar and task list with filters (All, Today, by category)",
+            "Support task CRUD including toggle-complete, edit modal, due date, and category assignment",
+            "Attach Authorization bearer header to API calls and redirect to login on 401",
+            "Serve /health via nginx and expose runtime-configurable VITE_API_URL"
+          ],
+          "architectureContext": "React SPA served by nginx on port 8080; communicates with todo-api over HTTPS using JWT bearer tokens and is the sole client of the API.",
+          "keyConsiderations": [
+            "Inject VITE_API_URL at runtime via env.js template substituted by nginx entrypoint",
+            "Global fetch wrapper handling 401 by clearing token and redirecting to /login",
+            "SPA fallback to index.html in nginx.conf, with /health static 200 location",
+            "Multi-stage Dockerfile node:20-alpine build → nginx:alpine runtime on port 8080",
+            "Guard authenticated routes; do not render dashboard without a valid token"
+          ],
+          "apiContract": "openapi: 3.0.3\ninfo:\n  title: Todo Web\n  version: 1.0.0\npaths:\n  /health:\n    get:\n      summary: Health check\n      responses:\n        '200':\n          description: OK\n",
+          "dependencies": [
+            "todo-api"
+          ]
+        }
+      ]
+    }
+  ],
+  "sourceSpec": "spec-v1",
+  "sourceDesign": "design-v1"
+}
