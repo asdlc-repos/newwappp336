@@ -1,0 +1,19 @@
+# Build artifacts
+/todo-api
+/out/
+/bin/
+*.exe
+
+# Go runtime
+*.test
+*.prof
+coverage.out
+
+# Logs
+.logs/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
