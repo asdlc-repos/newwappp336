@@ -13,5 +13,6 @@ A web app where people create and manage their to-do lists. Each person sees onl
 - Mark a task as complete or incomplete.
 - Organize tasks into categories they create themselves.
 - Edit or delete tasks they've added.
+- Monitoring based on last month todos
 
 *This is a rough sketch — edit anything that feels off.*
